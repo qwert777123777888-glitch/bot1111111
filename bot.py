@@ -9,14 +9,14 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 
 # === БЕЗОПАСНАЯ ЗАГРУЗКА ТОКЕНА ===
 # 1. Сначала пробуем загрузить из переменных окружения
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN")
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
 # 2. Если не нашли в переменных окружения, пробуем загрузить из файла .env
 if not TOKEN:
     try:
         from dotenv import load_dotenv
         load_dotenv()
-        TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN")
+        TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
     except ImportError:
         pass
 
@@ -24,14 +24,14 @@ if not TOKEN:
 if not TOKEN:
     print("❌ ОШИБКА: Токен бота не найден!")
     print("Добавьте токен одним из способов:")
-    print("1. В переменную окружения TELEGRAM_BOT_TOKEN или BOT_TOKEN")
+    print("1. В переменную окружения TELEGRAM_BOT_TOKEN")
     print("2. В файл .env (TELEGRAM_BOT_TOKEN=ваш_токен)")
     print("3. Для Bothost: Settings → Environment Variables")
     exit(1)
 
 print("✅ Токен успешно загружен")
 
-# --- LOGGING & DATA LOADING (SIMPLE LOGIC) ---
+# --- LOGGING & DATA LOADING ---
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -39,72 +39,40 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Определяем путь к папке с данными
+# Определяем абсолютный путь к папке data
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 
-print(f"📁 Базовая директория: {BASE_DIR}")
-print(f"📁 Папка с данными: {DATA_DIR}")
+print(f"📁 Загрузка данных из: {DATA_DIR}")
 
-def load_json_file(filename):
-    """Загружает JSON файл с обработкой ошибок"""
+# Загрузка всех данных с абсолютными путями
+def load_data_file(filename):
+    """Загружает файл с абсолютным путем"""
     filepath = os.path.join(DATA_DIR, filename)
-    
-    if not os.path.exists(filepath):
-        print(f"⚠️ Файл не найден: {filename}")
-        print(f"   Полный путь: {filepath}")
-        
-        # Пробуем найти файл в других возможных местах
-        alternative_paths = [
-            filename,  # в текущей директории
-            os.path.join(BASE_DIR, '..', 'data', filename),  # на уровень выше
-            os.path.join('/app', 'data', filename),  # стандартный путь в Bothost
-        ]
-        
-        for alt_path in alternative_paths:
-            if os.path.exists(alt_path):
-                filepath = alt_path
-                print(f"✅ Найден альтернативный путь: {alt_path}")
-                break
-    
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            print(f"✅ Загружен: {filename}")
-            return data
+            return json.load(f)
     except FileNotFoundError:
-        print(f"❌ Файл не найден нигде: {filename}")
-        print("   Создаю пустую структуру...")
+        print(f"❌ Файл не найден: {filepath}")
+        # Возвращаем пустой словарь чтобы бот не падал
         return {}
     except json.JSONDecodeError as e:
-        print(f"❌ Ошибка JSON в файле {filename}: {e}")
-        print("   Создаю пустую структуру...")
-        return {}
-    except Exception as e:
-        print(f"⚠️ Неизвестная ошибка при загрузке {filename}: {e}")
+        print(f"❌ Ошибка JSON в {filename}: {e}")
         return {}
 
-# Загрузка всех данных
-print("\n🔄 Загрузка игровых данных...")
+# Загружаем данные
+CLASSES = load_data_file('classes.json')
+LOCATIONS = load_data_file('locations.json')
+ENEMIES = load_data_file('enemies.json')
+BOSSES = load_data_file('bosses.json')
+QUESTS = load_data_file('quests.json')
+ITEMS = load_data_file('items.json')
+SPECIAL_ACTIONS = load_data_file('special_actions.json')
+STORY = load_data_file('story.json')
+RANDOM_EVENTS = load_data_file('random_events.json')
+ABILITIES = load_data_file('abilities.json')
 
-CLASSES = load_json_file('classes.json')
-LOCATIONS = load_json_file('locations.json')
-ENEMIES = load_json_file('enemies.json')
-BOSSES = load_json_file('bosses.json')
-QUESTS = load_json_file('quests.json')
-ITEMS = load_json_file('items.json')
-SPECIAL_ACTIONS = load_json_file('special_actions.json')
-STORY = load_json_file('story.json')
-RANDOM_EVENTS = load_json_file('random_events.json')
-ABILITIES = load_json_file('abilities.json')
-
-print("✅ Все данные загружены (или созданы пустые структуры)\n")
-
-# Проверяем, что основные данные не пустые
-if not CLASSES:
-    print("⚠️ ВНИМАНИЕ: classes.json пуст или не загружен!")
-if not LOCATIONS:
-    print("⚠️ ВНИМАНИЕ: locations.json пуст или не загружен!")
+print("✅ Данные загружены")
 
 player_states = {}
 
@@ -1263,4 +1231,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
