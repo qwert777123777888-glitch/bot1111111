@@ -76,6 +76,8 @@ print("✅ Данные загружены")
 
 player_states = {}
 
+# --- GAME CONSTANTS ---
+
 # Mapping damage types to emojis
 DAMAGE_ICONS = {
     "physical": "⚔️",
@@ -103,19 +105,19 @@ class Player:
         self.active_effects = []
         self.active_quests = []
         self.completed_quests = []
-        self.location = "class_selection"
+        self.location = "class_selection"  # Начинаем с выбора класса
         self.level = 1
         self.experience = 0
         self.kill_count = {}
         self.visited_locations = set()
         self.defeated_bosses = set()
-        self.current_city = "village_square"
+        self.current_city = None  # Пока нет города
         self.camp_entry_time = 0
         self.fatigue = 100
         self.last_fatigue_update = time.time()
         self.story_progress = {}
-        self.unlocked_cities = set(["village_square"])
-        self.last_location = "village_square"
+        self.unlocked_cities = set()
+        self.last_location = None
 
     def update_fatigue(self):
         current_time = time.time()
@@ -257,10 +259,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
              return
         await update.message.reply_text("👋 С возвращением! Продолжаем путешествие.")
         if player.location == "class_selection":
-            await show_location(update, context, player, player.current_city)
+            player.current_city = "village_square"
+            player.unlocked_cities.add("village_square")
+            await show_location(update, context, player, "village_square")
         else:
             await show_location(update, context, player, player.location)
     else:
+        # Очищаем состояние при старте новой игры
+        context.user_data.clear()
         await show_class_selection(update, context, player)
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -273,7 +279,17 @@ async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_class_selection(update, context, player):
     player.location = "class_selection"
+    player.current_city = None
     if 'selected_class' in context.user_data: del context.user_data['selected_class']
+    
+    # Очищаем только временные состояния, оставляя основное состояние игрока
+    temp_keys = ['in_battle', 'in_story', 'in_shop', 'in_shop_sell', 'in_inventory', 'in_city_teleport', 
+                 'viewing_item', 'in_random_event', 'current_event_chain', 'battle_potion_menu', 
+                 'shop_confirm_buy', 'shop_confirm_sell']
+    for key in temp_keys:
+        if key in context.user_data:
+            del context.user_data[key]
+    
     buttons = [KeyboardButton(f"👁️ {c['name']}") for c in CLASSES.values()]
     layout = get_keyboard_layout(buttons, 2)
     await context.bot.send_photo(
@@ -331,6 +347,7 @@ async def start_intro_story(update, context, player, quest_id=None):
     await asyncio.sleep(0.5)
     player.location = "village_square"
     player.current_city = "village_square"
+    player.unlocked_cities.add("village_square")
     await show_location(update, context, player, "village_square")
 
 async def show_location(update, context, player, loc_id):
@@ -420,7 +437,7 @@ async def show_story_scene(update, context, player, city, scene_id):
         await context.bot.send_photo(
             chat_id=update.effective_chat.id,
             photo=scene.get("image", "https://i.imgur.com/3Vk5Q7a.jpeg"),
-            caption=f"**📖 {scene.get('title', 'Сюжет')}**\n\n{scene['text']}",
+            caption=f"📖 **{scene.get('title', 'Сюжет')}**\n\n{scene['text']}",
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         )
@@ -1120,7 +1137,7 @@ async def handle_shop_action(update, context, player, text):
         if selected:
              await show_shop_item_details(update, context, player, selected, is_selling=False)
 
-# --- TELEPORT & STATS (UNCHANGED) ---
+# --- TELEPORT & STATS ---
 
 async def show_city_teleport_menu(update, context, player):
     context.user_data['in_city_teleport'] = True
@@ -1171,7 +1188,9 @@ async def show_stats(update, context, player):
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text: return
+    if not update.message or not update.message.text: 
+        return
+    
     text = update.message.text
     user_id = update.effective_user.id
     player = get_player(user_id)
@@ -1180,9 +1199,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("💤 Вы восстанавливаете силы...")
         return
 
-    if player.location == "class_selection":
+    # ПРОВЕРКА ВЫБОРА КЛАССА ДОЛЖНА БЫТЬ ПЕРВОЙ
+    if player.location == "class_selection" or player.class_name is None:
         await handle_class_selection(update, context, player, text)
         return
+
     if context.user_data.get('in_battle'):
         await handle_battle(update, context, player, text)
         return
@@ -1226,10 +1247,8 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("restart", restart))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("Bot started...")
+    print("✅ Бот запущен...")
     application.run_polling()
 
 if __name__ == "__main__":
     main()
-
-
